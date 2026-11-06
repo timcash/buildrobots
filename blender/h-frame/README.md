@@ -1,37 +1,37 @@
-# H-frame positioner
+# H-frame production loop
 
-The War Machine H-frame carries two illustrative T-joint blanks between
-a Rosie 1400 welder and a Rosie 1400 loader. The arms hold their parked
-poses while J9 indexes 180°, dwells, and completes a second 180° index.
-The open composition shows the table, deck, and staged parts on the
-loader stands. The model is illustrative and has no engineering scale.
+The Rosie 1400 loader unloads the finished part to the front stand, picks up a
+blank from the rear stand, and places it in the empty fixture while the other
+Rosie 1400 welds. J9 turns the H-frame 180° to exchange the loading and welding
+stations. The open studio view keeps both arms, the table and deck, both
+fixtures, and the stands in view. The model is illustrative and has no
+engineering scale.
 
-Open `h-frame.blend` in Blender 5.1.2 or later. The collections separate the
-positioner CAD, fixtures, workpieces, stationary foundation, two six-axis
-arm hierarchies, and studio. The timeline holds the native J9 and camera
-keyframes. The blend contains all its materials.
+Open `h-frame.blend` in Blender 5.1.2 or later. The rig retains the native
+slotted action from AMR's
+[`war-machine.blend`](https://github.com/advanced-metal-research/gradient-cli/blob/22f39a3479dccb01b3de83f70e40b2426f5e8825/buildrobots/v1/blender/war-machine.blend).
+The full timeline runs from frame 1 through 2211 at about 24 fps and includes both production
+cycles, J7/J8/J9, clamps, gripper jaws, part handoffs, growing weld beads and
+the arc. The studio, finishes, skid and open dual-arm composition come from
+the earlier H-frame hero. The scene is self-contained.
 
-The positioner, weld fixtures, arms, tooling, table, deck and stands come from
-AMR's
-`gradient-cli/buildrobots/v1/blender/war-machine.blend` at
-`22f39a3479dccb01b3de83f70e40b2426f5e8825`. The skid, central bearing housing,
-workpiece blanks in the fixture, bay marks, materials, and studio are
-authored in `create_scene.py`. The arm poses come from frame 1 of the source
-scene. The loader stand blanks reuse the source workpiece on both stands.
+The [video](../../renders/h-frame/h-frame-loop.mp4),
+[poster](../../renders/h-frame/h-frame-poster.jpg), and
+[looping GIF](../../renders/h-frame/h-frame-slides.gif) use the same view.
+The 1280 × 720 H.264 master follows the source `--hero` edit. It samples frames
+601–1706 at step two and plays those 553 frames at 24 fps, or about 23 seconds.
+The cut lands mid-weld after the bays exchange. The camera matches its
+opening pose and speed at the cut.
 
-The [eight-second master](../../renders/h-frame/h-frame-loop.mp4) is a
-1280 × 720, 24 fps, silent H.264 video. The site uses the master and its
-first-frame poster. The Utah deck embeds the same video from Drive.
-An animated GIF of the loop is also available for presentations. Render frames
-1–192. Frame 193 repeats the first pose to define the loop boundary. Camera
-keys outside the rendered range preserve its speed through the seam.
-
-From the repository root, with Blender and FFmpeg on PATH:
+From the repository root, with Blender and FFmpeg on PATH and the source scene
+available in a sibling `gradient-cli` checkout:
 
 ```powershell
 blender -b --disable-autoexec ../gradient-cli/buildrobots/v1/blender/war-machine.blend --python-exit-code 1 --python blender/h-frame/create_scene.py -- blender/h-frame/h-frame.blend
-blender -b --disable-autoexec blender/h-frame/h-frame.blend -a
-ffmpeg -framerate 24 -i blender/h-frame/frames/h-frame_%04d.png -an -c:v libx264 -crf 17 -pix_fmt yuv420p -movflags +faststart renders/h-frame/h-frame-loop.mp4
-ffmpeg -i renders/h-frame/h-frame-loop.mp4 -frames:v 1 -q:v 2 renders/h-frame/h-frame-poster.jpg
-ffmpeg -i renders/h-frame/h-frame-loop.mp4 -filter_complex 'fps=12,scale=800:-1:flags=lanczos,split[a][b];[a]palettegen=max_colors=192[p];[b][p]paletteuse=dither=bayer:bayer_scale=4' -loop 0 renders/h-frame/h-frame-slides.gif
+blender -b --disable-autoexec blender/h-frame/h-frame.blend -s 601 -e 1706 -j 2 -a
+$frames = 601..1706 | Where-Object { ($_ - 601) % 2 -eq 0 } | ForEach-Object { "file 'blender/h-frame/frames/h-frame_{0:0000}.png'" -f $_ }
+$frames | Set-Content -Encoding ascii h-frame-frames.txt
+ffmpeg -f concat -safe 0 -r 24 -i h-frame-frames.txt -an -c:v libx264 -crf 17 -pix_fmt yuv420p -movflags +faststart renders/h-frame/h-frame-loop.mp4
+ffmpeg -i blender/h-frame/frames/h-frame_0601.png -frames:v 1 -q:v 2 renders/h-frame/h-frame-poster.jpg
+ffmpeg -i renders/h-frame/h-frame-loop.mp4 -filter_complex 'fps=12,scale=720:-1:flags=lanczos,split[a][b];[a]palettegen=max_colors=128[p];[b][p]paletteuse=dither=bayer:bayer_scale=4:diff_mode=rectangle' -loop 0 renders/h-frame/h-frame-slides.gif
 ```
