@@ -120,7 +120,7 @@ for source_name, collection in (("Positioner", cad), ("Weld fixturing", fixtures
             continue
         world = original.matrix_world.copy()
         world.translation -= pivot
-        indexed = collection == fixtures or original.parent.name != "Positioner"
+        indexed = collection == fixtures or (original.parent and original.parent.name != "Positioner")
         part = add_object(collection, original.name, original.data.copy(), index if indexed else None)
         part.matrix_world = world
         if original.name.startswith(("T28-32212", "h-frame adaptor", "centre brace")):
@@ -180,7 +180,8 @@ camera_data = bpy.data.cameras.new("Hero camera")
 camera_data.type, camera_data.ortho_scale = 'ORTHO', 3.40
 camera = add_object(studio, "Hero camera", camera_data)
 scene.camera = camera
-for frame in range(1, 194, 4):
+# Give the closure keys neighbors on both sides so their tangents match.
+for frame in range(-3, 198, 4):
     phase = tau * (frame - 1) / 192
     camera.location = (4.4 + 0.48 * sin(phase), -6.9, 5.95 + 0.25 * cos(phase))
     aim(camera, (0, 0, 0.40))

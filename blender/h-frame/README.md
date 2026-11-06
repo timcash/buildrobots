@@ -18,7 +18,8 @@ The [eight-second master](../../renders/h-frame/h-frame-loop.mp4) is a
 1280 × 720, 24 fps, silent H.264 video. The site uses the master and its
 first-frame poster. The Utah deck uses the same sequence as an animated GIF
 so the slide can repeat it continuously. Render frames 1–192. Frame 193
-repeats the first pose to define the loop boundary.
+repeats the first pose to define the loop boundary. Camera keys outside the
+rendered range preserve its speed through the seam.
 
 From the repository root, with Blender and FFmpeg on PATH:
 
