@@ -88,13 +88,55 @@ def keyframe_interpolation(obj, interpolation):
                         key.handle_left_type = key.handle_right_type = 'AUTO_CLAMPED'
 
 
+def copy_station_mesh(original, collection, material, parent=None):
+    part = add_object(collection, original.name, original.data.copy(), parent)
+    part.matrix_basis = source_world[original].copy()
+    if parent:
+        part.matrix_basis = source_world[original.parent].inverted() @ part.matrix_basis
+    else:
+        part.location -= pivot
+    if material:
+        part.data.materials.clear()
+        part.data.materials.append(material)
+    return part
+
+
+def copy_arm(role, tool_meshes):
+    collection = group(f"{role} Rosie 1400 rig")
+    controls = {}
+
+    def copy_control(original):
+        if original not in controls:
+            parent = None if original.name.endswith(" / base") else copy_control(original.parent)
+            joint = original.name.rsplit(" / ", 1)[-1]
+            control = add_object(collection, f"{role} · {joint}", parent=parent)
+            control.empty_display_type = 'PLAIN_AXES'
+            control.empty_display_size = 0.08
+            if parent:
+                control.matrix_basis = source_world[original.parent].inverted() @ source_world[original]
+            else:
+                control.matrix_basis = source_world[original].copy()
+                control.location -= pivot
+            controls[original] = control
+        return controls[original]
+
+    for original in source.collection.children[f"{role} Rosie 1400"].objects:
+        if original.type == 'MESH':
+            name = original.name.removeprefix("Loader - ")
+            material = ink if name.startswith(("2010N33", "A6M", "1-01-02-base-plate")) else arm_finish
+            copy_station_mesh(original, collection, material, copy_control(original.parent))
+    for original, material in tool_meshes:
+        copy_station_mesh(original, collection, material, copy_control(original.parent))
+
+
 source = bpy.data.scenes["22 - War Machine ISO"]
 bpy.context.window.scene = source
 source.frame_set(1)
 bpy.context.view_layer.update()
-scene = bpy.data.scenes.new("H-frame | two-bay index")
+source_world = {obj: obj.matrix_world.copy() for obj in source.objects}
+scene = bpy.data.scenes.new("Dual Rosie workcell | two-bay H-frame index")
 bpy.context.window.scene = scene
-scene["Reference"] = "AMR War Machine ISO, positioner and weld fixturing"
+scene["Reference"] = "AMR War Machine ISO: dual Rosie arms, deck, loader tooling and H-frame"
 scene["Scope"] = "Illustrative model. Not engineering data. Not to scale."
 
 rig = group("01  |  J9 index")
@@ -113,24 +155,51 @@ steel = finish("Satin machined steel", "89949e", 0.67, 0.31)
 clamp = finish("Blackened fixture steel", "495666", 0.38, 0.31)
 blank = finish("Bright cold-rolled workpiece", "bbc6cd", 0.53, 0.28)
 paper = finish("Paper studio · #ebebeb", "ebebeb", 0, 0.64)
+deck = finish("Satin machine deck", "879399", 0.28, 0.49)
+arm_finish = finish("Rosie · slate powder coat", "53687a", 0.18, 0.38)
 
 for source_name, collection in (("Positioner", cad), ("Weld fixturing", fixtures)):
     for original in source.collection.children[source_name].objects:
         if original.type != 'MESH':
             continue
-        world = original.matrix_world.copy()
-        world.translation -= pivot
         indexed = collection == fixtures or (original.parent and original.parent.name != "Positioner")
-        part = add_object(collection, original.name, original.data.copy(), index if indexed else None)
-        part.matrix_world = world
         if original.name.startswith(("T28-32212", "h-frame adaptor", "centre brace")):
             material = blue
         elif collection == fixtures:
             material = steel if "bolt" in original.name or "spindle" in original.name else clamp
         else:
             material = steel if indexed else ink
+        part = add_object(collection, original.name, original.data.copy(), index if indexed else None)
+        part.matrix_basis = source_world[original].copy()
+        part.location -= pivot
         part.data.materials.clear()
         part.data.materials.append(material)
+
+for name in ("Table", "Base and deck", "Robot base"):
+    for original in source.collection.children[name].objects:
+        if original.type == 'MESH':
+            material = ink if name == "Robot base" else deck
+            copy_station_mesh(original, base, material)
+block(base, "Recessed deck floor", (-0.497, 0, -0.161), (3.17, 2.23, 0.080), clamp)
+
+# Keep the native weld head, loader gripper and stands. Both arms are
+# parked clear of the illustrated J9 sweep.
+tooling = source.collection.children["Loader tooling and stands"].objects
+for original in tooling:
+    if original.parent is None:
+        copy_station_mesh(original, base, ink)
+copy_arm("Welder", [
+    (obj, None) for obj in source.collection.children["MIG welding head - website asset"].objects
+    if obj.type == 'MESH'
+])
+copy_arm("Loader", [(obj, steel) for obj in tooling if obj.parent])
+staged_parts = source.collection.children["ANIMATION - workpieces and weld beads"].objects
+for shape in ("plate", "web"):
+    original = staged_parts[f"Cycle part 0 / {shape}"]
+    copy_station_mesh(original, fixtures, blank).name = f"Rear stand · workpiece {shape}"
+    front = copy_station_mesh(original, fixtures, blank)
+    front.name = f"Front stand · workpiece {shape}"
+    front.location.y -= 1.70
 
 # Two captured T-joint blanks make the bay exchange readable as the fixture moves.
 for bay, x in (("A", -0.50), ("B", 0.50)):
@@ -150,7 +219,7 @@ drum(base, "Bearing shoulder", (0, 0, 0.215), 0.208, 0.057, steel)
 for x in (-0.48, 0.48):
     for y in (-0.28, 0.28):
         drum(base, f"Anchor fastener {x:+.2f} {y:+.2f}", (x, y, 0.023), 0.028, 0.022, steel)
-block(studio, "Studio ground", (0, 0, -0.12), (200, 200, 0.03), paper, 0)
+block(studio, "Studio ground", (0, 0, -0.218), (200, 200, 0.03), paper, 0)
 
 # Two equal indexes with stationary dwell at each bay. Frame 193 is the
 # closure reference, so the encoder uses frames 1–192 exactly once.
@@ -177,14 +246,14 @@ for name, xyz, power, size in (
     aim(light, (0, 0, 0.3))
 
 camera_data = bpy.data.cameras.new("Hero camera")
-camera_data.type, camera_data.ortho_scale = 'ORTHO', 3.40
+camera_data.type, camera_data.ortho_scale = 'ORTHO', 5.35
 camera = add_object(studio, "Hero camera", camera_data)
 scene.camera = camera
 # Give the closure keys neighbors on both sides so their tangents match.
 for frame in range(-3, 198, 4):
     phase = tau * (frame - 1) / 192
-    camera.location = (4.4 + 0.48 * sin(phase), -6.9, 5.95 + 0.25 * cos(phase))
-    aim(camera, (0, 0, 0.40))
+    camera.location = (2.05 + 0.48 * sin(phase), -7.5, 5.0 + 0.25 * cos(phase))
+    aim(camera, (-0.08, -0.06, 0.44))
     camera.keyframe_insert("location", frame=frame, group="Periodic camera")
     camera.keyframe_insert("rotation_euler", frame=frame, group="Periodic camera")
 keyframe_interpolation(camera, 'BEZIER')
