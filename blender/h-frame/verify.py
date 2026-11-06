@@ -19,7 +19,22 @@ moving_parts = [obj for obj in index.children if obj.type == 'MESH']
 assert len(moving_parts) > 100
 assert all(scene.objects[f"Bay {bay} · workpiece plate"].parent == index for bay in "AB")
 assert base.parent is None
+assert not any("enclosure" in collection.name.lower() for collection in scene.collection.children)
+assert scene.objects["Recessed deck floor"].parent is None
+assert all(scene.objects[f"{stand} stand · workpiece plate"].parent is None for stand in ("Front", "Rear"))
 product_meshes = [obj for obj in scene.objects if obj.type == 'MESH' and obj.name != "Studio ground"]
+
+arm_shoulders = []
+for role in ("Welder", "Loader"):
+    arm = scene.collection.children[f"{role} Rosie 1400 rig"]
+    parent = None
+    for joint in ("base", "turret", "upper_arm", "elbow", "forearm", "wrist", "flange"):
+        control = arm.objects[f"{role} · {joint}"]
+        assert control.type == 'EMPTY' and control.parent == parent
+        assert not control.hide_render and not control.hide_viewport
+        assert any(child.type == 'MESH' and not child.hide_render for child in control.children)
+        parent = control
+    arm_shoulders.append(arm.objects[f"{role} · upper_arm"])
 
 
 def pose(frame):
@@ -45,9 +60,11 @@ assert (incoming - outgoing).length < 0.001
 
 for frame in range(1, 193):
     scene.frame_set(frame)
+    left, right = [world_to_camera_view(scene, camera, arm.matrix_world.translation).x for arm in arm_shoulders]
+    assert 0.08 < left < 0.35 and 0.65 < right < 0.92, (frame, left, right)
     for obj in product_meshes:
         for corner in obj.bound_box:
             view = world_to_camera_view(scene, camera, obj.matrix_world @ Vector(corner))
             assert 0.01 < view.x < 0.99 and 0.01 < view.y < 0.99, (frame, obj.name, view)
 
-print("PASS: native bay exchange, fixed base, closed index and camera motion, full frame coverage")
+print("PASS: two articulated Rosie arms, open deck, native bay exchange, closed loop, full frame coverage")
